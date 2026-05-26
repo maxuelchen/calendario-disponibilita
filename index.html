@@ -155,6 +155,11 @@
   }
 
   /* Month view */
+  .month-hint {
+    max-width: 1100px; margin: 0 auto 12px auto;
+    font-size: 13px; color: var(--muted); text-align: center;
+    padding: 8px; background: var(--hover); border-radius: 6px;
+  }
   .month-grid {
     display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
     max-width: 1100px; margin: 0 auto;
@@ -166,18 +171,22 @@
   .day-cell {
     background: var(--panel); border: 1px solid var(--border);
     border-radius: 6px; min-height: 90px; padding: 6px;
-    cursor: pointer; display: flex; flex-direction: column;
-    transition: border-color 0.1s;
+    cursor: copy; display: flex; flex-direction: column;
+    transition: border-color 0.1s, background 0.1s;
+    user-select: none;
   }
   .day-cell:hover { border-color: var(--text); }
   .day-cell.other-month { opacity: 0.35; }
   .day-cell.today .day-num { background: var(--text); color: white; }
-  .day-cell.me-available { box-shadow: inset 0 0 0 2px var(--accent); }
+  .day-cell.me-available { box-shadow: inset 0 0 0 2px var(--accent); background: #eff6ff; }
   .day-num {
     font-size: 13px; font-weight: 600;
     width: 24px; height: 24px; display: flex; align-items: center;
     justify-content: center; border-radius: 50%; margin-bottom: 4px;
+    cursor: pointer;
   }
+  .day-num:hover { background: var(--hover); }
+  .day-cell.today .day-num:hover { background: var(--text); }
   .day-dots { display: flex; flex-wrap: wrap; gap: 3px; margin-top: auto; }
   .day-dots .swatch { width: 10px; height: 10px; }
 
@@ -482,18 +491,11 @@ function renderCalendar() {
     });
   } else if (view.type === "month") {
     header.textContent = `${MONTHS[view.month]} ${view.year}`;
-    cal.innerHTML = renderMonthView(view.year, view.month);
-    cal.querySelectorAll(".day-cell").forEach(el => {
-      el.onclick = () => {
-        view = {
-          type: "day",
-          year: parseInt(el.dataset.year),
-          month: parseInt(el.dataset.month),
-          day: parseInt(el.dataset.day)
-        };
-        render();
-      };
-    });
+    const hint = sessionData.users[myUserId]
+      ? `<div class="month-hint">Clicca o trascina sui giorni per segnare la tua disponibilit\u00e0. Clicca sul numero del giorno per il dettaglio.</div>`
+      : `<div class="month-hint">Unisciti dalla barra laterale per segnare la tua disponibilit\u00e0.</div>`;
+    cal.innerHTML = hint + renderMonthView(view.year, view.month);
+    attachMonthHandlers(cal);
   } else if (view.type === "day") {
     const d = new Date(view.year, view.month, view.day);
     header.textContent = `${DOW_LONG[(d.getDay()+6)%7]} ${view.day} ${MONTHS[view.month]} ${view.year}`;
@@ -624,6 +626,62 @@ async function toggleAvailability() {
     [`availability.${key}.${myUserId}`]: isAvailable ? deleteField() : true
   });
 }
+
+let isDragging = false;
+let dragSetTo = false;
+const dragKeys = new Map();
+
+function attachMonthHandlers(cal) {
+  cal.querySelectorAll(".day-cell").forEach(el => {
+    el.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      if (e.target.classList.contains("day-num")) {
+        view = {
+          type: "day",
+          year: parseInt(el.dataset.year),
+          month: parseInt(el.dataset.month),
+          day: parseInt(el.dataset.day)
+        };
+        render();
+        return;
+      }
+      if (!sessionData.users[myUserId]) {
+        toast("Unisciti per segnare la tua disponibilit\u00e0");
+        return;
+      }
+      e.preventDefault();
+      const key = dateKey(parseInt(el.dataset.year), parseInt(el.dataset.month), parseInt(el.dataset.day));
+      dragSetTo = !getAvailabilityFor(key).includes(myUserId);
+      isDragging = true;
+      dragKeys.clear();
+      addToDrag(el, key);
+    });
+    el.addEventListener("mouseenter", () => {
+      if (!isDragging) return;
+      const key = dateKey(parseInt(el.dataset.year), parseInt(el.dataset.month), parseInt(el.dataset.day));
+      addToDrag(el, key);
+    });
+  });
+}
+
+function addToDrag(el, key) {
+  if (dragKeys.has(key)) return;
+  dragKeys.set(key, dragSetTo);
+  if (dragSetTo) el.classList.add("me-available");
+  else el.classList.remove("me-available");
+}
+
+window.addEventListener("mouseup", async () => {
+  if (!isDragging) return;
+  isDragging = false;
+  if (dragKeys.size === 0) return;
+  const updates = {};
+  for (const [key, val] of dragKeys) {
+    updates[`availability.${key}.${myUserId}`] = val ? true : deleteField();
+  }
+  dragKeys.clear();
+  await updateDoc(doc(db, "sessions", sessionId), updates);
+});
 
 async function leaveSession() {
   if (!confirm("Vuoi rimuoverti dalla sessione? Le tue disponibilit\u00e0 verranno cancellate.")) return;
