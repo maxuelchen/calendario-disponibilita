@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calendario Disponibilit√†</title>
+<!--
+  ====================================================================
+  SETUP (una volta sola):
+
+  1. Vai su https://console.firebase.google.com/ e crea un progetto.
+  2. Nel progetto: "Build" ‚Üí "Firestore Database" ‚Üí "Create database"
+     ‚Üí modalit√† "production" ‚Üí scegli una region (es. eur3).
+  3. Tab "Rules" di Firestore, incolla queste regole e pubblica:
+
+        rules_version = '2';
+        service cloud.firestore {
+          match /databases/{database}/documents {
+            match /sessions/{sessionId} {
+              allow read, write: if true;
+            }
+          }
+        }
+
+  4. Torna alla home del progetto ‚Üí icona "</>" (Web app) ‚Üí registra
+     l'app ‚Üí copia l'oggetto firebaseConfig.
+  5. Incolla i valori qui sotto al posto di quelli "INCOLLA_QUI".
+  6. Carica questo file su un repo GitHub e attiva GitHub Pages
+     (Settings ‚Üí Pages ‚Üí Source: branch main, folder root).
+     Apri https://<utente>.github.io/<repo>/ e condividi il link che
+     appare nella barra indirizzi (contiene #session-...).
+  ====================================================================
+-->
+<style>
+  :root {
+    --bg: #f7f7f5;
+    --panel: #ffffff;
+    --border: #e5e5e0;
+    --text: #1a1a1a;
+    --muted: #6b6b6b;
+    --accent: #2563eb;
+    --hover: #f0f0ec;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; background: var(--bg); color: var(--text); }
+  button { font: inherit; cursor: pointer; }
+  input { font: inherit; }
+
+  #app { display: flex; height: 100vh; }
+  aside {
+    width: 280px;
+    background: var(--panel);
+    border-right: 1px solid var(--border);
+    padding: 16px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Sidebar */
+  .title-row { display: flex; align-items: flex-start; gap: 6px; }
+  .title-row h1 {
+    font-size: 18px; margin: 0; flex: 1; line-height: 1.3;
+    word-break: break-word;
+  }
+  .icon-btn {
+    background: none; border: none; padding: 4px;
+    border-radius: 4px; color: var(--muted);
+  }
+  .icon-btn:hover { background: var(--hover); color: var(--text); }
+  .section-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--muted); font-weight: 600; margin-bottom: 6px;
+  }
+  .user-chip {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px; border-radius: 6px; font-size: 14px;
+  }
+  .user-chip.me { background: var(--hover); }
+  .swatch { width: 14px; height: 14px; border-radius: 50%; flex-shrink: 0; }
+  .user-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+  .btn {
+    background: var(--text); color: white; border: none;
+    padding: 8px 12px; border-radius: 6px; font-size: 14px;
+    width: 100%;
+  }
+  .btn:hover { opacity: 0.9; }
+  .btn.secondary { background: white; color: var(--text); border: 1px solid var(--border); }
+  .btn.secondary:hover { background: var(--hover); }
+
+  .join-form { display: flex; flex-direction: column; gap: 8px; }
+  .join-form input {
+    padding: 8px; border: 1px solid var(--border); border-radius: 6px;
+    width: 100%;
+  }
+  .color-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; }
+  .color-grid button {
+    aspect-ratio: 1; border: 2px solid transparent;
+    border-radius: 50%; cursor: pointer; padding: 0;
+  }
+  .color-grid button.selected { border-color: var(--text); }
+
+  /* Main header */
+  .main-header {
+    display: flex; align-items: center; gap: 8px;
+    padding: 12px 20px; border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  .main-header h2 { font-size: 20px; margin: 0; flex: 1; }
+  .nav-btn {
+    background: white; border: 1px solid var(--border);
+    padding: 6px 10px; border-radius: 6px;
+  }
+  .nav-btn:hover { background: var(--hover); }
+
+  /* Calendar views */
+  .calendar-area { flex: 1; overflow: auto; padding: 20px; }
+
+  /* Year view */
+  .year-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 16px;
+  }
+  .mini-month {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px; cursor: pointer;
+  }
+  .mini-month:hover { border-color: var(--text); }
+  .mini-month h3 {
+    font-size: 14px; margin: 0 0 8px 0; text-align: center;
+    text-transform: capitalize;
+  }
+  .mini-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+    font-size: 11px;
+  }
+  .mini-grid .dow {
+    text-align: center; color: var(--muted); font-weight: 600;
+    padding: 2px;
+  }
+  .mini-day {
+    aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+    border-radius: 3px; position: relative;
+  }
+  .mini-day.today { background: #fef3c7; font-weight: 600; }
+  .mini-day.has-availability { background: var(--hover); font-weight: 600; }
+  .mini-day .count-dot {
+    position: absolute; bottom: 1px; right: 1px;
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--accent);
+  }
+
+  /* Month view */
+  .month-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px;
+    max-width: 1100px; margin: 0 auto;
+  }
+  .month-grid .dow {
+    font-size: 12px; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; text-align: center; padding: 8px;
+  }
+  .day-cell {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 6px; min-height: 90px; padding: 6px;
+    cursor: pointer; display: flex; flex-direction: column;
+    transition: border-color 0.1s;
+  }
+  .day-cell:hover { border-color: var(--text); }
+  .day-cell.other-month { opacity: 0.35; }
+  .day-cell.today .day-num { background: var(--text); color: white; }
+  .day-cell.me-available { box-shadow: inset 0 0 0 2px var(--accent); }
+  .day-num {
+    font-size: 13px; font-weight: 600;
+    width: 24px; height: 24px; display: flex; align-items: center;
+    justify-content: center; border-radius: 50%; margin-bottom: 4px;
+  }
+  .day-dots { display: flex; flex-wrap: wrap; gap: 3px; margin-top: auto; }
+  .day-dots .swatch { width: 10px; height: 10px; }
+
+  /* Day view */
+  .day-detail {
+    max-width: 600px; margin: 0 auto;
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 24px;
+  }
+  .day-detail h3 { font-size: 22px; margin: 0 0 4px 0; text-transform: capitalize; }
+  .day-detail .day-sub { color: var(--muted); margin-bottom: 20px; }
+  .toggle-btn {
+    width: 100%; padding: 12px; border-radius: 6px;
+    border: 2px solid var(--accent); background: white; color: var(--accent);
+    font-weight: 600; margin-bottom: 20px;
+  }
+  .toggle-btn.active { background: var(--accent); color: white; }
+  .available-list { display: flex; flex-direction: column; gap: 8px; }
+  .available-list .user-chip { background: var(--hover); }
+  .empty-state { color: var(--muted); font-style: italic; padding: 8px; }
+
+  /* Setup warning */
+  #setup-warning {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+    color: white; padding: 40px; z-index: 1000;
+    overflow-y: auto; font-family: monospace; font-size: 14px;
+  }
+  #setup-warning .box { max-width: 700px; margin: 0 auto; }
+  #setup-warning h1 { font-family: -apple-system, sans-serif; }
+  #setup-warning code, #setup-warning pre {
+    background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;
+  }
+  #setup-warning pre { padding: 12px; overflow-x: auto; }
+
+  .toast {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: var(--text); color: white; padding: 10px 16px;
+    border-radius: 6px; font-size: 14px; opacity: 0;
+    transition: opacity 0.2s; pointer-events: none; z-index: 100;
+  }
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 700px) {
+    #app { flex-direction: column; }
+    aside { width: 100%; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+    .day-cell { min-height: 60px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="setup-warning" hidden>
+  <div class="box">
+    <h1>Configurazione Firebase richiesta</h1>
+    <p>Apri questo file con un editor di testo e sostituisci i valori
+    <code>INCOLLA_QUI</code> con quelli del tuo progetto Firebase.
+    Le istruzioni complete sono nei commenti in cima al file HTML.</p>
+    <p>In breve:</p>
+    <ol>
+      <li>Crea un progetto su <code>console.firebase.google.com</code></li>
+      <li>Attiva Firestore Database (modalit√† production)</li>
+      <li>Aggiungi una Web App e copia <code>firebaseConfig</code></li>
+      <li>Incolla i valori nello script in fondo al file</li>
+      <li>Imposta le regole Firestore come descritto nei commenti</li>
+    </ol>
+  </div>
+</div>
+
+<div id="app" hidden>
+  <aside>
+    <div class="title-row">
+      <h1 id="title">Calendario</h1>
+      <button class="icon-btn" id="edit-title" title="Modifica titolo">‚úèÔ∏è</button>
+    </div>
+
+    <div>
+      <div class="section-label">Tu</div>
+      <div id="me-panel"></div>
+    </div>
+
+    <div>
+      <div class="section-label">Partecipanti</div>
+      <div id="users-list"></div>
+    </div>
+
+    <div style="margin-top: auto; display: flex; flex-direction: column; gap: 8px;">
+      <button class="btn secondary" id="share">üìã Copia link sessione</button>
+      <button class="btn secondary" id="new-session">+ Nuova sessione</button>
+    </div>
+  </aside>
+
+  <main>
+    <div class="main-header">
+      <button class="nav-btn" id="back" hidden>‚Üê</button>
+      <h2 id="view-title"></h2>
+      <button class="nav-btn" id="prev" hidden>‚Äπ</button>
+      <button class="nav-btn" id="next" hidden>‚Ä∫</button>
+      <button class="nav-btn" id="today-btn">Oggi</button>
+    </div>
+    <div class="calendar-area" id="calendar"></div>
+  </main>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+// ====================================================================
+// CONFIGURAZIONE FIREBASE ‚Äî sostituisci i valori "INCOLLA_QUI"
+// ====================================================================
+const firebaseConfig = {
+  apiKey: "AIzaSyAVYqtfVV9-ZqkEuWqmWXmHVHDhmcN01qc",
+  authDomain: "calendario-920da.firebaseapp.com",
+  projectId: "calendario-920da",
+  storageBucket: "calendario-920da.firebasestorage.app",
+  messagingSenderId: "907694714961",
+  appId: "1:907694714961:web:003ba2f489d8ed7cef4870"
+};
+// ====================================================================
+
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+import {
+  getFirestore, doc, setDoc, onSnapshot, updateDoc, deleteField, serverTimestamp
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+
+// Mostra warning se non configurato
+if (firebaseConfig.apiKey.startsWith("INCOLLA_QUI")) {
+  document.getElementById("setup-warning").hidden = false;
+  document.getElementById("app").hidden = true;
+  throw new Error("Firebase non configurato");
+}
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+
+// ---------- Stato locale ----------
+const COLORS = [
+  "#ef4444", "#f97316", "#f59e0b", "#eab308",
+  "#84cc16", "#22c55e", "#10b981", "#14b8a6",
+  "#06b6d4", "#0ea5e9", "#3b82f6", "#6366f1",
+  "#8b5cf6", "#a855f7", "#d946ef", "#ec4899"
+];
+const MONTHS = ["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
+const DOW_SHORT = ["L","M","M","G","V","S","D"];
+const DOW_LONG = ["lun","mar","mer","gio","ven","sab","dom"];
+
+let sessionId = null;
+let sessionData = { title: "Calendario", users: {}, availability: {} };
+let myUserId = localStorage.getItem("calendar_user_id");
+if (!myUserId) {
+  myUserId = "u_" + Math.random().toString(36).slice(2, 10);
+  localStorage.setItem("calendar_user_id", myUserId);
+}
+
+// view: { type: "year", year } | { type: "month", year, month } | { type: "day", year, month, day }
+let view = null;
+const today = new Date();
+
+// ---------- Bootstrap sessione da URL hash ----------
+async function bootstrap() {
+  const hash = location.hash.replace(/^#/, "");
+  if (hash.startsWith("session-")) {
+    sessionId = hash.slice("session-".length);
+  } else {
+    sessionId = newSessionId();
+    location.hash = "session-" + sessionId;
+    await setDoc(doc(db, "sessions", sessionId), {
+      title: "Calendario disponibilit√†",
+      users: {},
+      availability: {},
+      createdAt: serverTimestamp()
+    });
+  }
+  // ascolta cambiamenti
+  onSnapshot(doc(db, "sessions", sessionId), (snap) => {
+    if (snap.exists()) {
+      sessionData = { title: "Calendario", users: {}, availability: {}, ...snap.data() };
+      render();
+    } else {
+      // sessione cancellata o non esiste ‚Üí crea
+      setDoc(doc(db, "sessions", sessionId), {
+        title: "Calendario disponibilit√†",
+        users: {},
+        availability: {},
+        createdAt: serverTimestamp()
+      });
+    }
+  });
+  view = { type: "year", year: today.getFullYear() };
+}
+
+function newSessionId() {
+  return Math.random().toString(36).slice(2, 8) + Math.random().toString(36).slice(2, 6);
+}
+
+// ---------- Helpers ----------
+function dateKey(y, m, d) {
+  return `${y}-${String(m+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+}
+function daysInMonth(y, m) { return new Date(y, m+1, 0).getDate(); }
+function firstDowMondayBased(y, m) {
+  // Lun=0...Dom=6
+  const d = new Date(y, m, 1).getDay();
+  return (d + 6) % 7;
+}
+function isToday(y, m, d) {
+  return y === today.getFullYear() && m === today.getMonth() && d === today.getDate();
+}
+function getAvailabilityFor(key) {
+  const slot = sessionData.availability[key];
+  if (!slot) return [];
+  return Object.keys(slot).filter(uid => slot[uid] && sessionData.users[uid]);
+}
+
+// ---------- Render ----------
+function render() {
+  document.getElementById("title").textContent = sessionData.title || "Calendario";
+  renderMePanel();
+  renderUsersList();
+  renderCalendar();
+}
+
+function renderMePanel() {
+  const panel = document.getElementById("me-panel");
+  const me = sessionData.users[myUserId];
+  if (me) {
+    panel.innerHTML = `
+      <div class="user-chip me">
+        <span class="swatch" style="background:${me.color}"></span>
+        <span class="user-name">${escapeHtml(me.name)}</span>
+        <button class="icon-btn" id="leave" title="Esci">‚úï</button>
+      </div>
+    `;
+    document.getElementById("leave").onclick = leaveSession;
+  } else {
+    const usedColors = new Set(Object.values(sessionData.users).map(u => u.color));
+    const defaultColor = COLORS.find(c => !usedColors.has(c)) || COLORS[0];
+    panel.innerHTML = `
+      <div class="join-form">
+        <input id="join-name" type="text" placeholder="Il tuo nome" maxlength="40">
+        <div class="color-grid" id="join-colors"></div>
+        <button class="btn" id="join-btn">Unisciti</button>
+      </div>
+    `;
+    const colorGrid = document.getElementById("join-colors");
+    let selectedColor = defaultColor;
+    const renderColors = () => {
+      colorGrid.innerHTML = COLORS.map(c => `
+        <button data-color="${c}" style="background:${c}" class="${c===selectedColor?'selected':''}"></button>
+      `).join("");
+      colorGrid.querySelectorAll("button").forEach(b => {
+        b.onclick = () => { selectedColor = b.dataset.color; renderColors(); };
+      });
+    };
+    renderColors();
+    document.getElementById("join-btn").onclick = async () => {
+      const name = document.getElementById("join-name").value.trim();
+      if (!name) { toast("Inserisci il tuo nome"); return; }
+      await updateDoc(doc(db, "sessions", sessionId), {
+        [`users.${myUserId}`]: { name, color: selectedColor }
+      });
+    };
+    document.getElementById("join-name").addEventListener("keydown", e => {
+      if (e.key === "Enter") document.getElementById("join-btn").click();
+    });
+  }
+}
+
+function renderUsersList() {
+  const list = document.getElementById("users-list");
+  const entries = Object.entries(sessionData.users);
+  if (entries.length === 0) {
+    list.innerHTML = `<div class="empty-state">Nessun partecipante ancora</div>`;
+    return;
+  }
+  list.innerHTML = entries.map(([uid, u]) => `
+    <div class="user-chip">
+      <span class="swatch" style="background:${u.color}"></span>
+      <span class="user-name">${escapeHtml(u.name)}${uid===myUserId?' (tu)':''}</span>
+    </div>
+  `).join("");
+}
+
+function renderCalendar() {
+  const cal = document.getElementById("calendar");
+  const header = document.getElementById("view-title");
+  const back = document.getElementById("back");
+  const prev = document.getElementById("prev");
+  const next = document.getElementById("next");
+
+  back.hidden = view.type === "year";
+  prev.hidden = view.type === "year";
+  next.hidden = view.type === "year";
+
+  if (view.type === "year") {
+    header.textContent = view.year;
+    cal.innerHTML = `<div class="year-grid">${MONTHS.map((mn, mi) => renderMiniMonth(view.year, mi)).join("")}</div>`;
+    cal.querySelectorAll(".mini-month").forEach(el => {
+      el.onclick = () => {
+        view = { type: "month", year: view.year, month: parseInt(el.dataset.month) };
+        render();
+      };
+    });
+  } else if (view.type === "month") {
+    header.textContent = `${MONTHS[view.month]} ${view.year}`;
+    cal.innerHTML = renderMonthView(view.year, view.month);
+    cal.querySelectorAll(".day-cell").forEach(el => {
+      el.onclick = () => {
+        view = {
+          type: "day",
+          year: parseInt(el.dataset.year),
+          month: parseInt(el.dataset.month),
+          day: parseInt(el.dataset.day)
+        };
+        render();
+      };
+    });
+  } else if (view.type === "day") {
+    const d = new Date(view.year, view.month, view.day);
+    header.textContent = `${DOW_LONG[(d.getDay()+6)%7]} ${view.day} ${MONTHS[view.month]} ${view.year}`;
+    cal.innerHTML = renderDayView(view.year, view.month, view.day);
+    const tBtn = document.getElementById("toggle-availability");
+    if (tBtn) tBtn.onclick = toggleAvailability;
+  }
+}
+
+function renderMiniMonth(year, month) {
+  const dim = daysInMonth(year, month);
+  const offset = firstDowMondayBased(year, month);
+  let cells = "";
+  for (let i = 0; i < offset; i++) cells += `<div></div>`;
+  for (let d = 1; d <= dim; d++) {
+    const key = dateKey(year, month, d);
+    const users = getAvailabilityFor(key);
+    const classes = ["mini-day"];
+    if (isToday(year, month, d)) classes.push("today");
+    if (users.length > 0) classes.push("has-availability");
+    cells += `<div class="${classes.join(" ")}">${d}${users.length>0?'<span class="count-dot"></span>':''}</div>`;
+  }
+  return `
+    <div class="mini-month" data-month="${month}">
+      <h3>${MONTHS[month]}</h3>
+      <div class="mini-grid">
+        ${DOW_SHORT.map(d => `<div class="dow">${d}</div>`).join("")}
+        ${cells}
+      </div>
+    </div>
+  `;
+}
+
+function renderMonthView(year, month) {
+  const dim = daysInMonth(year, month);
+  const offset = firstDowMondayBased(year, month);
+  const prevMonth = month === 0 ? 11 : month - 1;
+  const prevYear = month === 0 ? year - 1 : year;
+  const prevDim = daysInMonth(prevYear, prevMonth);
+
+  let cells = "";
+  // giorni del mese precedente
+  for (let i = offset - 1; i >= 0; i--) {
+    const d = prevDim - i;
+    cells += dayCellHtml(prevYear, prevMonth, d, true);
+  }
+  // mese corrente
+  for (let d = 1; d <= dim; d++) {
+    cells += dayCellHtml(year, month, d, false);
+  }
+  // riempi fino a multiplo di 7
+  const total = offset + dim;
+  const trailing = (7 - (total % 7)) % 7;
+  const nextMonth = month === 11 ? 0 : month + 1;
+  const nextYear = month === 11 ? year + 1 : year;
+  for (let d = 1; d <= trailing; d++) {
+    cells += dayCellHtml(nextYear, nextMonth, d, true);
+  }
+  return `
+    <div class="month-grid">
+      ${DOW_LONG.map(d => `<div class="dow">${d}</div>`).join("")}
+      ${cells}
+    </div>
+  `;
+}
+
+function dayCellHtml(year, month, day, otherMonth) {
+  const key = dateKey(year, month, day);
+  const uids = getAvailabilityFor(key);
+  const classes = ["day-cell"];
+  if (otherMonth) classes.push("other-month");
+  if (isToday(year, month, day)) classes.push("today");
+  if (uids.includes(myUserId)) classes.push("me-available");
+  const dots = uids.map(uid => `<span class="swatch" style="background:${sessionData.users[uid].color}" title="${escapeHtml(sessionData.users[uid].name)}"></span>`).join("");
+  return `
+    <div class="${classes.join(' ')}" data-year="${year}" data-month="${month}" data-day="${day}">
+      <div class="day-num">${day}</div>
+      <div class="day-dots">${dots}</div>
+    </div>
+  `;
+}
+
+function renderDayView(year, month, day) {
+  const key = dateKey(year, month, day);
+  const uids = getAvailabilityFor(key);
+  const me = sessionData.users[myUserId];
+  const meAvail = uids.includes(myUserId);
+
+  const toggleHtml = me ? `
+    <button class="toggle-btn ${meAvail?'active':''}" id="toggle-availability">
+      ${meAvail ? '‚úì Sono disponibile (clicca per togliere)' : '+ Segna la tua disponibilit√†'}
+    </button>
+  ` : `
+    <div class="empty-state" style="text-align:center; margin-bottom:20px;">
+      Unisciti dalla barra laterale per segnare la tua disponibilit√†
+    </div>
+  `;
+
+  const listHtml = uids.length === 0
+    ? `<div class="empty-state">Nessuno disponibile</div>`
+    : uids.map(uid => {
+        const u = sessionData.users[uid];
+        return `
+          <div class="user-chip">
+            <span class="swatch" style="background:${u.color}"></span>
+            <span class="user-name">${escapeHtml(u.name)}${uid===myUserId?' (tu)':''}</span>
+          </div>
+        `;
+      }).join("");
+
+  return `
+    <div class="day-detail">
+      <div class="day-sub">${uids.length} ${uids.length===1?'persona disponibile':'persone disponibili'}</div>
+      ${toggleHtml}
+      <div class="section-label">Disponibili</div>
+      <div class="available-list">${listHtml}</div>
+    </div>
+  `;
+}
+
+// ---------- Azioni ----------
+async function toggleAvailability() {
+  if (!sessionData.users[myUserId]) return;
+  const key = dateKey(view.year, view.month, view.day);
+  const uids = getAvailabilityFor(key);
+  const isAvailable = uids.includes(myUserId);
+  await updateDoc(doc(db, "sessions", sessionId), {
+    [`availability.${key}.${myUserId}`]: isAvailable ? deleteField() : true
+  });
+}
+
+async function leaveSession() {
+  if (!confirm("Vuoi rimuoverti dalla sessione? Le tue disponibilit√† verranno cancellate.")) return;
+  const updates = { [`users.${myUserId}`]: deleteField() };
+  // rimuovi le tue disponibilit√†
+  for (const dKey of Object.keys(sessionData.availability)) {
+    if (sessionData.availability[dKey][myUserId]) {
+      updates[`availability.${dKey}.${myUserId}`] = deleteField();
+    }
+  }
+  await updateDoc(doc(db, "sessions", sessionId), updates);
+}
+
+document.getElementById("edit-title").onclick = async () => {
+  const newTitle = prompt("Nuovo titolo del calendario:", sessionData.title || "");
+  if (newTitle && newTitle.trim()) {
+    await updateDoc(doc(db, "sessions", sessionId), { title: newTitle.trim() });
+  }
+};
+
+document.getElementById("share").onclick = () => {
+  navigator.clipboard.writeText(location.href).then(() => toast("Link copiato!"));
+};
+
+document.getElementById("new-session").onclick = () => {
+  if (!confirm("Creare una nuova sessione di calendario? Otterrai un nuovo link da condividere.")) return;
+  location.hash = "";
+  location.reload();
+};
+
+document.getElementById("back").onclick = () => {
+  if (view.type === "day") {
+    view = { type: "month", year: view.year, month: view.month };
+  } else if (view.type === "month") {
+    view = { type: "year", year: view.year };
+  }
+  render();
+};
+
+document.getElementById("prev").onclick = () => {
+  if (view.type === "month") {
+    if (view.month === 0) { view.month = 11; view.year--; }
+    else view.month--;
+  } else if (view.type === "day") {
+    const d = new Date(view.year, view.month, view.day - 1);
+    view = { type: "day", year: d.getFullYear(), month: d.getMonth(), day: d.getDate() };
+  }
+  render();
+};
+
+document.getElementById("next").onclick = () => {
+  if (view.type === "month") {
+    if (view.month === 11) { view.month = 0; view.year++; }
+    else view.month++;
+  } else if (view.type === "day") {
+    const d = new Date(view.year, view.month, view.day + 1);
+    view = { type: "day", year: d.getFullYear(), month: d.getMonth(), day: d.getDate() };
+  }
+  render();
+};
+
+document.getElementById("today-btn").onclick = () => {
+  view = { type: "month", year: today.getFullYear(), month: today.getMonth() };
+  render();
+};
+
+// ---------- Utils ----------
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 2000);
+}
+
+bootstrap();
+</script>
+</body>
+</html>
