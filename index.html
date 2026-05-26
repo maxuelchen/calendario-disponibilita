@@ -194,6 +194,12 @@
     display: flex; flex-direction: column; gap: 2px;
     margin-top: auto; overflow: hidden;
   }
+  .day-cell.density-m .day-chips { gap: 1px; }
+  .day-cell.density-m .user-chip-mini { font-size: 10px; padding: 1px 6px; line-height: 1.3; }
+  .day-cell.density-s .day-chips { gap: 1px; }
+  .day-cell.density-s .user-chip-mini { font-size: 9px; padding: 0px 5px; line-height: 1.3; border-radius: 8px; }
+  .day-cell.density-xs .day-chips { gap: 0; }
+  .day-cell.density-xs .user-chip-mini { font-size: 8px; padding: 0px 4px; line-height: 1.3; border-radius: 6px; }
   .user-chip-mini {
     font-size: 11px;
     padding: 2px 8px;
@@ -649,18 +655,19 @@ function dayCellHtml(year, month, day, otherMonth) {
   if (otherMonth) classes.push("other-month");
   if (isToday(year, month, day)) classes.push("today");
   if (allDay.includes(myUserId)) classes.push("me-available");
-  const MAX = 3;
-  const chips = all.slice(0, MAX).map(uid => {
+  if (all.length >= 8) classes.push("density-xs");
+  else if (all.length >= 6) classes.push("density-s");
+  else if (all.length >= 4) classes.push("density-m");
+  const chips = all.map(uid => {
     const u = sessionData.users[uid];
     const isPartial = !allDay.includes(uid);
     const title = escapeHtml(u.name) + (isPartial ? " (solo alcune fasce)" : " (tutto il giorno)");
     return `<div class="user-chip-mini${isPartial ? ' partial' : ''}" style="background:${u.color}" title="${title}">${escapeHtml(u.name)}</div>`;
   }).join("");
-  const more = all.length > MAX ? `<div class="user-chip-mini more" title="${all.length - MAX} altri">+${all.length - MAX}</div>` : "";
   return `
     <div class="${classes.join(' ')}" data-year="${year}" data-month="${month}" data-day="${day}">
       <div class="day-num">${day}</div>
-      <div class="day-chips">${chips}${more}</div>
+      <div class="day-chips">${chips}</div>
     </div>
   `;
 }
