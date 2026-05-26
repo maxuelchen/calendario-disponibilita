@@ -147,11 +147,14 @@
     border-radius: 3px; position: relative;
   }
   .mini-day.today { background: #fef3c7; font-weight: 600; }
-  .mini-day.has-availability { background: var(--hover); font-weight: 600; }
-  .mini-day .count-dot {
-    position: absolute; bottom: 1px; right: 1px;
-    width: 5px; height: 5px; border-radius: 50%;
-    background: var(--accent);
+  .mini-day.has-availability { font-weight: 600; }
+  .mini-day .mini-dots {
+    position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+    display: flex; gap: 1px; line-height: 0;
+  }
+  .mini-day .mini-dot {
+    width: 4px; height: 4px; border-radius: 50%;
+    display: inline-block;
   }
 
   /* Month view */
@@ -516,7 +519,11 @@ function renderMiniMonth(year, month) {
     const classes = ["mini-day"];
     if (isToday(year, month, d)) classes.push("today");
     if (users.length > 0) classes.push("has-availability");
-    cells += `<div class="${classes.join(" ")}">${d}${users.length>0?'<span class="count-dot"></span>':''}</div>`;
+    const dots = users.slice(0, 4).map(uid =>
+      `<span class="mini-dot" style="background:${sessionData.users[uid].color}"></span>`
+    ).join("");
+    const dotsHtml = users.length > 0 ? `<span class="mini-dots">${dots}</span>` : "";
+    cells += `<div class="${classes.join(" ")}">${d}${dotsHtml}</div>`;
   }
   return `
     <div class="mini-month" data-month="${month}">
