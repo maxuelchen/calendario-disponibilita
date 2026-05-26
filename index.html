@@ -190,26 +190,76 @@
   }
   .day-num:hover { background: var(--hover); }
   .day-cell.today .day-num:hover { background: var(--text); }
-  .day-dots { display: flex; flex-wrap: wrap; gap: 3px; margin-top: auto; }
-  .day-dots .swatch { width: 10px; height: 10px; }
+  .day-chips {
+    display: flex; flex-direction: column; gap: 2px;
+    margin-top: auto; overflow: hidden;
+  }
+  .user-chip-mini {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    color: white;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+    font-weight: 500;
+    line-height: 1.4;
+  }
+  .user-chip-mini.partial {
+    opacity: 0.75;
+    border: 1px dashed rgba(255,255,255,0.7);
+    padding: 1px 7px;
+  }
+  .user-chip-mini.more {
+    background: var(--muted) !important;
+    color: white;
+  }
 
   /* Day view */
-  .day-detail {
-    max-width: 600px; margin: 0 auto;
+  .day-detail { max-width: 760px; margin: 0 auto; }
+  .day-section {
     background: var(--panel); border: 1px solid var(--border);
-    border-radius: 8px; padding: 24px;
+    border-radius: 8px; padding: 20px; margin-bottom: 16px;
   }
-  .day-detail h3 { font-size: 22px; margin: 0 0 4px 0; text-transform: capitalize; }
-  .day-detail .day-sub { color: var(--muted); margin-bottom: 20px; }
+  .day-section h4 {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--muted); margin: 0 0 12px 0; font-weight: 600;
+  }
   .toggle-btn {
     width: 100%; padding: 12px; border-radius: 6px;
     border: 2px solid var(--accent); background: white; color: var(--accent);
-    font-weight: 600; margin-bottom: 20px;
+    font-weight: 600; margin-bottom: 12px; cursor: pointer;
   }
   .toggle-btn.active { background: var(--accent); color: white; }
-  .available-list { display: flex; flex-direction: column; gap: 8px; }
-  .available-list .user-chip { background: var(--hover); }
-  .empty-state { color: var(--muted); font-style: italic; padding: 8px; }
+  .user-list {
+    display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .slots-grid {
+    display: flex; flex-direction: column; gap: 4px;
+    user-select: none;
+  }
+  .slot-row {
+    display: flex; align-items: center; gap: 12px;
+    padding: 8px 12px; border-radius: 6px;
+    border: 1px solid var(--border);
+    cursor: copy;
+    transition: background 0.1s, border-color 0.1s;
+  }
+  .slot-row:hover { border-color: var(--text); }
+  .slot-row.me-available {
+    background: #eff6ff;
+    border-color: var(--accent);
+    box-shadow: inset 0 0 0 1px var(--accent);
+  }
+  .slot-time {
+    font-weight: 600; font-size: 13px; min-width: 110px;
+    color: var(--text);
+  }
+  .slot-users {
+    display: flex; flex-wrap: wrap; gap: 4px; flex: 1;
+  }
+  .empty-state { color: var(--muted); font-style: italic; padding: 8px; font-size: 13px; }
 
   /* Setup warning */
   #setup-warning {
@@ -334,9 +384,10 @@ const COLORS = [
 const MONTHS = ["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
 const DOW_SHORT = ["L","M","M","G","V","S","D"];
 const DOW_LONG = ["lun","mar","mer","gio","ven","sab","dom"];
+const HOURS = ["08","09","10","11","12","13","14","15","16","17","18","19","20","21","22","23"];
 
 let sessionId = null;
-let sessionData = { title: "Calendario", users: {}, availability: {} };
+let sessionData = { title: "Calendario", users: {}, availability: {}, slots: {} };
 let myUserId = localStorage.getItem("calendar_user_id");
 if (!myUserId) {
   myUserId = "u_" + Math.random().toString(36).slice(2, 10);
@@ -365,7 +416,7 @@ async function bootstrap() {
   // ascolta cambiamenti
   onSnapshot(doc(db, "sessions", sessionId), (snap) => {
     if (snap.exists()) {
-      sessionData = { title: "Calendario", users: {}, availability: {}, ...snap.data() };
+      sessionData = { title: "Calendario", users: {}, availability: {}, slots: {}, ...snap.data() };
       render();
     } else {
       // sessione cancellata o non esiste -> crea
@@ -401,6 +452,27 @@ function getAvailabilityFor(key) {
   const slot = sessionData.availability[key];
   if (!slot) return [];
   return Object.keys(slot).filter(uid => slot[uid] && sessionData.users[uid]);
+}
+function getSlotUsers(key, hour) {
+  const daySlots = sessionData.slots && sessionData.slots[key];
+  if (!daySlots) return [];
+  const slot = daySlots[hour];
+  if (!slot) return [];
+  return Object.keys(slot).filter(uid => slot[uid] && sessionData.users[uid]);
+}
+function getAnyAvailability(key) {
+  const allDay = getAvailabilityFor(key);
+  const partial = new Set();
+  const daySlots = sessionData.slots && sessionData.slots[key];
+  if (daySlots) {
+    for (const hour of HOURS) {
+      const slot = daySlots[hour] || {};
+      for (const uid of Object.keys(slot)) {
+        if (slot[uid] && sessionData.users[uid] && !allDay.includes(uid)) partial.add(uid);
+      }
+    }
+  }
+  return { all: [...allDay, ...partial], allDay, partial: [...partial] };
 }
 
 // ---------- Render ----------
@@ -505,6 +577,7 @@ function renderCalendar() {
     cal.innerHTML = renderDayView(view.year, view.month, view.day);
     const tBtn = document.getElementById("toggle-availability");
     if (tBtn) tBtn.onclick = toggleAvailability;
+    attachSlotHandlers(cal);
   }
 }
 
@@ -515,14 +588,14 @@ function renderMiniMonth(year, month) {
   for (let i = 0; i < offset; i++) cells += `<div></div>`;
   for (let d = 1; d <= dim; d++) {
     const key = dateKey(year, month, d);
-    const users = getAvailabilityFor(key);
+    const { all } = getAnyAvailability(key);
     const classes = ["mini-day"];
     if (isToday(year, month, d)) classes.push("today");
-    if (users.length > 0) classes.push("has-availability");
-    const dots = users.slice(0, 4).map(uid =>
+    if (all.length > 0) classes.push("has-availability");
+    const dots = all.slice(0, 4).map(uid =>
       `<span class="mini-dot" style="background:${sessionData.users[uid].color}"></span>`
     ).join("");
-    const dotsHtml = users.length > 0 ? `<span class="mini-dots">${dots}</span>` : "";
+    const dotsHtml = all.length > 0 ? `<span class="mini-dots">${dots}</span>` : "";
     cells += `<div class="${classes.join(" ")}">${d}${dotsHtml}</div>`;
   }
   return `
@@ -571,56 +644,85 @@ function renderMonthView(year, month) {
 
 function dayCellHtml(year, month, day, otherMonth) {
   const key = dateKey(year, month, day);
-  const uids = getAvailabilityFor(key);
+  const { all, allDay } = getAnyAvailability(key);
   const classes = ["day-cell"];
   if (otherMonth) classes.push("other-month");
   if (isToday(year, month, day)) classes.push("today");
-  if (uids.includes(myUserId)) classes.push("me-available");
-  const dots = uids.map(uid => `<span class="swatch" style="background:${sessionData.users[uid].color}" title="${escapeHtml(sessionData.users[uid].name)}"></span>`).join("");
+  if (allDay.includes(myUserId)) classes.push("me-available");
+  const MAX = 3;
+  const chips = all.slice(0, MAX).map(uid => {
+    const u = sessionData.users[uid];
+    const isPartial = !allDay.includes(uid);
+    const title = escapeHtml(u.name) + (isPartial ? " (solo alcune fasce)" : " (tutto il giorno)");
+    return `<div class="user-chip-mini${isPartial ? ' partial' : ''}" style="background:${u.color}" title="${title}">${escapeHtml(u.name)}</div>`;
+  }).join("");
+  const more = all.length > MAX ? `<div class="user-chip-mini more" title="${all.length - MAX} altri">+${all.length - MAX}</div>` : "";
   return `
     <div class="${classes.join(' ')}" data-year="${year}" data-month="${month}" data-day="${day}">
       <div class="day-num">${day}</div>
-      <div class="day-dots">${dots}</div>
+      <div class="day-chips">${chips}${more}</div>
     </div>
   `;
 }
 
+function userChipHtml(uid, marker) {
+  const u = sessionData.users[uid];
+  if (!u) return "";
+  const label = escapeHtml(u.name) + (uid === myUserId ? " (tu)" : "");
+  return `<div class="user-chip-mini" style="background:${u.color}" title="${escapeHtml(u.name)}${marker ? " - " + marker : ""}">${label}</div>`;
+}
+
 function renderDayView(year, month, day) {
   const key = dateKey(year, month, day);
-  const uids = getAvailabilityFor(key);
+  const allDay = getAvailabilityFor(key);
   const me = sessionData.users[myUserId];
-  const meAvail = uids.includes(myUserId);
+  const meAllDay = allDay.includes(myUserId);
 
-  const toggleHtml = me ? `
-    <button class="toggle-btn ${meAvail?'active':''}" id="toggle-availability">
-      ${meAvail ? '[v] Sono disponibile (clicca per togliere)' : '+ Segna la tua disponibilit\u00e0'}
-    </button>
-  ` : `
-    <div class="empty-state" style="text-align:center; margin-bottom:20px;">
-      Unisciti dalla barra laterale per segnare la tua disponibilit\u00e0
+  const allDaySection = `
+    <div class="day-section">
+      <h4>Tutto il giorno</h4>
+      ${me
+        ? `<button class="toggle-btn ${meAllDay ? 'active' : ''}" id="toggle-availability">
+            ${meAllDay ? '[v] Sei disponibile tutto il giorno (clicca per togliere)' : '+ Segnati come disponibile tutto il giorno'}
+          </button>`
+        : `<div class="empty-state">Unisciti dalla barra laterale per segnare la tua disponibilit\u00e0.</div>`}
+      <div class="user-list">
+        ${allDay.length === 0
+          ? '<div class="empty-state">Nessuno disponibile tutto il giorno</div>'
+          : allDay.map(uid => userChipHtml(uid, "tutto il giorno")).join("")}
+      </div>
     </div>
   `;
 
-  const listHtml = uids.length === 0
-    ? `<div class="empty-state">Nessuno disponibile</div>`
-    : uids.map(uid => {
-        const u = sessionData.users[uid];
-        return `
-          <div class="user-chip">
-            <span class="swatch" style="background:${u.color}"></span>
-            <span class="user-name">${escapeHtml(u.name)}${uid===myUserId?' (tu)':''}</span>
-          </div>
-        `;
-      }).join("");
+  const slotsHtml = HOURS.map(hour => {
+    const slotUsers = getSlotUsers(key, hour);
+    const combined = [...allDay];
+    for (const uid of slotUsers) if (!combined.includes(uid)) combined.push(uid);
+    const meAvailable = meAllDay || slotUsers.includes(myUserId);
+    const nextH = parseInt(hour) + 1;
+    const nextStr = nextH === 24 ? "00" : String(nextH).padStart(2, "0");
+    const chips = combined.length === 0
+      ? '<span class="empty-state" style="padding:0">Nessuno</span>'
+      : combined.map(uid => userChipHtml(uid, allDay.includes(uid) ? "tutto il giorno" : "")).join("");
+    return `
+      <div class="slot-row${meAvailable ? ' me-available' : ''}" data-hour="${hour}">
+        <span class="slot-time">${hour}:00 - ${nextStr}:00</span>
+        <div class="slot-users">${chips}</div>
+      </div>
+    `;
+  }).join("");
 
-  return `
-    <div class="day-detail">
-      <div class="day-sub">${uids.length} ${uids.length===1?'persona disponibile':'persone disponibili'}</div>
-      ${toggleHtml}
-      <div class="section-label">Disponibili</div>
-      <div class="available-list">${listHtml}</div>
+  const slotsSection = `
+    <div class="day-section">
+      <h4>Fasce orarie</h4>
+      ${me
+        ? '<div class="empty-state" style="margin-bottom:8px;">Clicca o trascina sulle fasce per segnare solo alcune ore.</div>'
+        : ''}
+      <div class="slots-grid">${slotsHtml}</div>
     </div>
   `;
+
+  return `<div class="day-detail">${allDaySection}${slotsSection}</div>`;
 }
 
 // ---------- Azioni ----------
@@ -637,6 +739,39 @@ async function toggleAvailability() {
 let isDragging = false;
 let dragSetTo = false;
 const dragKeys = new Map();
+let isSlotDragging = false;
+let slotDragSetTo = false;
+const slotDragHours = new Set();
+
+function attachSlotHandlers(cal) {
+  cal.querySelectorAll(".slot-row").forEach(el => {
+    el.addEventListener("mousedown", (e) => {
+      if (e.button !== 0) return;
+      if (!sessionData.users[myUserId]) {
+        toast("Unisciti per segnare la tua disponibilit\u00e0");
+        return;
+      }
+      e.preventDefault();
+      const hour = el.dataset.hour;
+      const key = dateKey(view.year, view.month, view.day);
+      slotDragSetTo = !getSlotUsers(key, hour).includes(myUserId);
+      isSlotDragging = true;
+      slotDragHours.clear();
+      addSlotToDrag(el, hour);
+    });
+    el.addEventListener("mouseenter", () => {
+      if (!isSlotDragging) return;
+      addSlotToDrag(el, el.dataset.hour);
+    });
+  });
+}
+
+function addSlotToDrag(el, hour) {
+  if (slotDragHours.has(hour)) return;
+  slotDragHours.add(hour);
+  if (slotDragSetTo) el.classList.add("me-available");
+  else el.classList.remove("me-available");
+}
 
 function attachMonthHandlers(cal) {
   cal.querySelectorAll(".day-cell").forEach(el => {
@@ -679,24 +814,44 @@ function addToDrag(el, key) {
 }
 
 window.addEventListener("mouseup", async () => {
-  if (!isDragging) return;
-  isDragging = false;
-  if (dragKeys.size === 0) return;
-  const updates = {};
-  for (const [key, val] of dragKeys) {
-    updates[`availability.${key}.${myUserId}`] = val ? true : deleteField();
+  if (isDragging) {
+    isDragging = false;
+    if (dragKeys.size > 0) {
+      const updates = {};
+      for (const [key, val] of dragKeys) {
+        updates[`availability.${key}.${myUserId}`] = val ? true : deleteField();
+      }
+      dragKeys.clear();
+      await updateDoc(doc(db, "sessions", sessionId), updates);
+    }
   }
-  dragKeys.clear();
-  await updateDoc(doc(db, "sessions", sessionId), updates);
+  if (isSlotDragging) {
+    isSlotDragging = false;
+    if (slotDragHours.size > 0) {
+      const key = dateKey(view.year, view.month, view.day);
+      const updates = {};
+      for (const hour of slotDragHours) {
+        updates[`slots.${key}.${hour}.${myUserId}`] = slotDragSetTo ? true : deleteField();
+      }
+      slotDragHours.clear();
+      await updateDoc(doc(db, "sessions", sessionId), updates);
+    }
+  }
 });
 
 async function leaveSession() {
   if (!confirm("Vuoi rimuoverti dalla sessione? Le tue disponibilit\u00e0 verranno cancellate.")) return;
   const updates = { [`users.${myUserId}`]: deleteField() };
-  // rimuovi le tue disponibilit\u00e0
-  for (const dKey of Object.keys(sessionData.availability)) {
-    if (sessionData.availability[dKey][myUserId]) {
+  for (const dKey of Object.keys(sessionData.availability || {})) {
+    if (sessionData.availability[dKey] && sessionData.availability[dKey][myUserId]) {
       updates[`availability.${dKey}.${myUserId}`] = deleteField();
+    }
+  }
+  for (const dKey of Object.keys(sessionData.slots || {})) {
+    for (const hour of Object.keys(sessionData.slots[dKey] || {})) {
+      if (sessionData.slots[dKey][hour] && sessionData.slots[dKey][hour][myUserId]) {
+        updates[`slots.${dKey}.${hour}.${myUserId}`] = deleteField();
+      }
     }
   }
   await updateDoc(doc(db, "sessions", sessionId), updates);
@@ -772,4 +927,3 @@ bootstrap();
 </script>
 </body>
 </html>
- 
