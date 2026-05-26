@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Calendario Disponibilit√†</title>
+<title>Calendario Disponibilit&agrave;</title>
 <!--
   ====================================================================
   SETUP (una volta sola):
 
   1. Vai su https://console.firebase.google.com/ e crea un progetto.
-  2. Nel progetto: "Build" ‚Üí "Firestore Database" ‚Üí "Create database"
-     ‚Üí modalit√† "production" ‚Üí scegli una region (es. eur3).
+  2. Nel progetto: "Build" -> "Firestore Database" -> "Create database"
+     -> modalit\u00e0 "production" -> scegli una region (es. eur3).
   3. Tab "Rules" di Firestore, incolla queste regole e pubblica:
 
         rules_version = '2';
@@ -22,11 +22,11 @@
           }
         }
 
-  4. Torna alla home del progetto ‚Üí icona "</>" (Web app) ‚Üí registra
-     l'app ‚Üí copia l'oggetto firebaseConfig.
+  4. Torna alla home del progetto -> icona "</>" (Web app) -> registra
+     l'app -> copia l'oggetto firebaseConfig.
   5. Incolla i valori qui sotto al posto di quelli "INCOLLA_QUI".
   6. Carica questo file su un repo GitHub e attiva GitHub Pages
-     (Settings ‚Üí Pages ‚Üí Source: branch main, folder root).
+     (Settings -> Pages -> Source: branch main, folder root).
      Apri https://<utente>.github.io/<repo>/ e condividi il link che
      appare nella barra indirizzi (contiene #session-...).
   ====================================================================
@@ -238,7 +238,7 @@
     <p>In breve:</p>
     <ol>
       <li>Crea un progetto su <code>console.firebase.google.com</code></li>
-      <li>Attiva Firestore Database (modalit√† production)</li>
+      <li>Attiva Firestore Database (modalit&agrave; production)</li>
       <li>Aggiungi una Web App e copia <code>firebaseConfig</code></li>
       <li>Incolla i valori nello script in fondo al file</li>
       <li>Imposta le regole Firestore come descritto nei commenti</li>
@@ -250,7 +250,7 @@
   <aside>
     <div class="title-row">
       <h1 id="title">Calendario</h1>
-      <button class="icon-btn" id="edit-title" title="Modifica titolo">‚úèÔ∏è</button>
+      <button class="icon-btn" id="edit-title" title="Modifica titolo">Edit</button>
     </div>
 
     <div>
@@ -264,17 +264,17 @@
     </div>
 
     <div style="margin-top: auto; display: flex; flex-direction: column; gap: 8px;">
-      <button class="btn secondary" id="share">üìã Copia link sessione</button>
+      <button class="btn secondary" id="share">Copia link sessione</button>
       <button class="btn secondary" id="new-session">+ Nuova sessione</button>
     </div>
   </aside>
 
   <main>
     <div class="main-header">
-      <button class="nav-btn" id="back" hidden>‚Üê</button>
+      <button class="nav-btn" id="back" hidden>&larr;</button>
       <h2 id="view-title"></h2>
-      <button class="nav-btn" id="prev" hidden>‚Äπ</button>
-      <button class="nav-btn" id="next" hidden>‚Ä∫</button>
+      <button class="nav-btn" id="prev" hidden>&lsaquo;</button>
+      <button class="nav-btn" id="next" hidden>&rsaquo;</button>
       <button class="nav-btn" id="today-btn">Oggi</button>
     </div>
     <div class="calendar-area" id="calendar"></div>
@@ -285,7 +285,7 @@
 
 <script type="module">
 // ====================================================================
-// CONFIGURAZIONE FIREBASE ‚Äî sostituisci i valori "INCOLLA_QUI"
+// CONFIGURAZIONE FIREBASE -- sostituisci i valori "INCOLLA_QUI"
 // ====================================================================
 const firebaseConfig = {
   apiKey: "AIzaSyAVYqtfVV9-ZqkEuWqmWXmHVHDhmcN01qc",
@@ -344,7 +344,7 @@ async function bootstrap() {
     sessionId = newSessionId();
     location.hash = "session-" + sessionId;
     await setDoc(doc(db, "sessions", sessionId), {
-      title: "Calendario disponibilit√†",
+      title: "Calendario disponibilit\u00e0",
       users: {},
       availability: {},
       createdAt: serverTimestamp()
@@ -356,9 +356,9 @@ async function bootstrap() {
       sessionData = { title: "Calendario", users: {}, availability: {}, ...snap.data() };
       render();
     } else {
-      // sessione cancellata o non esiste ‚Üí crea
+      // sessione cancellata o non esiste -> crea
       setDoc(doc(db, "sessions", sessionId), {
-        title: "Calendario disponibilit√†",
+        title: "Calendario disponibilit\u00e0",
         users: {},
         availability: {},
         createdAt: serverTimestamp()
@@ -407,7 +407,7 @@ function renderMePanel() {
       <div class="user-chip me">
         <span class="swatch" style="background:${me.color}"></span>
         <span class="user-name">${escapeHtml(me.name)}</span>
-        <button class="icon-btn" id="leave" title="Esci">‚úï</button>
+        <button class="icon-btn" id="leave" title="Esci">X</button>
       </div>
     `;
     document.getElementById("leave").onclick = leaveSession;
@@ -584,11 +584,11 @@ function renderDayView(year, month, day) {
 
   const toggleHtml = me ? `
     <button class="toggle-btn ${meAvail?'active':''}" id="toggle-availability">
-      ${meAvail ? '‚úì Sono disponibile (clicca per togliere)' : '+ Segna la tua disponibilit√†'}
+      ${meAvail ? '[v] Sono disponibile (clicca per togliere)' : '+ Segna la tua disponibilit\u00e0'}
     </button>
   ` : `
     <div class="empty-state" style="text-align:center; margin-bottom:20px;">
-      Unisciti dalla barra laterale per segnare la tua disponibilit√†
+      Unisciti dalla barra laterale per segnare la tua disponibilit\u00e0
     </div>
   `;
 
@@ -626,9 +626,9 @@ async function toggleAvailability() {
 }
 
 async function leaveSession() {
-  if (!confirm("Vuoi rimuoverti dalla sessione? Le tue disponibilit√† verranno cancellate.")) return;
+  if (!confirm("Vuoi rimuoverti dalla sessione? Le tue disponibilit\u00e0 verranno cancellate.")) return;
   const updates = { [`users.${myUserId}`]: deleteField() };
-  // rimuovi le tue disponibilit√†
+  // rimuovi le tue disponibilit\u00e0
   for (const dKey of Object.keys(sessionData.availability)) {
     if (sessionData.availability[dKey][myUserId]) {
       updates[`availability.${dKey}.${myUserId}`] = deleteField();
