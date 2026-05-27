@@ -151,11 +151,16 @@
   .mini-day .mini-dots {
     position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
     display: flex; gap: 1px; line-height: 0;
+    flex-wrap: wrap; justify-content: center;
+    max-width: 100%;
   }
   .mini-day .mini-dot {
     width: 4px; height: 4px; border-radius: 50%;
-    display: inline-block;
+    display: inline-block; flex-shrink: 0;
   }
+  .mini-day.many-dots .mini-dot { width: 3px; height: 3px; }
+  .mini-day.very-many-dots .mini-dot { width: 2px; height: 2px; }
+  .mini-day.very-many-dots .mini-dots { gap: 0; }
 
   /* Month view */
   .month-hint {
@@ -598,7 +603,9 @@ function renderMiniMonth(year, month) {
     const classes = ["mini-day"];
     if (isToday(year, month, d)) classes.push("today");
     if (all.length > 0) classes.push("has-availability");
-    const dots = all.slice(0, 4).map(uid =>
+    if (all.length > 8) classes.push("very-many-dots");
+    else if (all.length > 4) classes.push("many-dots");
+    const dots = all.map(uid =>
       `<span class="mini-dot" style="background:${sessionData.users[uid].color}"></span>`
     ).join("");
     const dotsHtml = all.length > 0 ? `<span class="mini-dots">${dots}</span>` : "";
