@@ -190,6 +190,10 @@
   .day-cell.other-month { opacity: 0.35; }
   .day-cell.today .day-num { background: var(--text); color: white; }
   .day-cell.me-available { box-shadow: inset 0 0 0 2px var(--accent); background: #eff6ff; }
+  .day-cell.best-day { background: #fef3c7; border-color: #f59e0b; }
+  .day-cell.best-day.me-available { background: linear-gradient(135deg, #fef3c7 0%, #fef3c7 50%, #eff6ff 50%, #eff6ff 100%); }
+  .mini-day.best-day { background: #fde68a; border-radius: 4px; }
+  .mini-day.best-day.today { background: #fcd34d; }
   .day-num {
     font-size: 13px; font-weight: 600;
     width: 24px; height: 24px; display: flex; align-items: center;
@@ -490,8 +494,22 @@ function getAnyAvailability(key) {
 }
 
 // ---------- Render ----------
+let _maxCount = 0;
+function computeMaxCount() {
+  let max = 0;
+  const dateKeys = new Set([
+    ...Object.keys(sessionData.availability || {}),
+    ...Object.keys(sessionData.slots || {})
+  ]);
+  for (const key of dateKeys) {
+    const c = getAnyAvailability(key).all.length;
+    if (c > max) max = c;
+  }
+  return max;
+}
 function render() {
   document.getElementById("title").textContent = sessionData.title || "Calendario";
+  _maxCount = computeMaxCount();
   renderMePanel();
   renderUsersList();
   renderCalendar();
@@ -606,6 +624,7 @@ function renderMiniMonth(year, month) {
     const classes = ["mini-day"];
     if (isToday(year, month, d)) classes.push("today");
     if (all.length > 0) classes.push("has-availability");
+    if (_maxCount >= 2 && all.length === _maxCount) classes.push("best-day");
     if (all.length > 8) classes.push("very-many-dots");
     else if (all.length > 4) classes.push("many-dots");
     const dots = all.map(uid =>
@@ -665,6 +684,7 @@ function dayCellHtml(year, month, day, otherMonth) {
   if (otherMonth) classes.push("other-month");
   if (isToday(year, month, day)) classes.push("today");
   if (allDay.includes(myUserId)) classes.push("me-available");
+  if (_maxCount >= 2 && all.length === _maxCount) classes.push("best-day");
   if (all.length >= 8) classes.push("density-xs");
   else if (all.length >= 6) classes.push("density-s");
   else if (all.length >= 4) classes.push("density-m");
