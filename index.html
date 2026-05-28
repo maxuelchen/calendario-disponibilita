@@ -300,10 +300,80 @@
   }
   .toast.show { opacity: 1; }
 
-  @media (max-width: 700px) {
-    #app { flex-direction: column; }
-    aside { width: 100%; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
-    .day-cell { min-height: 60px; }
+  /* Hamburger (nascosto su desktop) */
+  .menu-toggle {
+    display: none;
+    background: white; border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 10px; cursor: pointer;
+    flex-direction: column; gap: 0;
+  }
+  .menu-toggle span {
+    display: block; width: 18px; height: 2px;
+    background: var(--text); margin: 2px 0; border-radius: 2px;
+  }
+  #sidebar-overlay { display: none; }
+
+  /* ================= MOBILE ================= */
+  @media (max-width: 768px) {
+    .menu-toggle { display: inline-flex; }
+
+    /* Sidebar come drawer da sinistra */
+    aside {
+      position: fixed; top: 0; left: 0; bottom: 0;
+      width: 82%; max-width: 320px;
+      z-index: 200;
+      transform: translateX(-100%);
+      transition: transform 0.25s ease;
+      box-shadow: 2px 0 16px rgba(0,0,0,0.15);
+    }
+    #app.sidebar-open aside { transform: translateX(0); }
+    #sidebar-overlay {
+      display: block; position: fixed; inset: 0;
+      background: rgba(0,0,0,0.4); z-index: 150;
+      opacity: 0; pointer-events: none; transition: opacity 0.25s;
+    }
+    #app.sidebar-open #sidebar-overlay { opacity: 1; pointer-events: auto; }
+
+    main { width: 100%; }
+    .main-header {
+      gap: 6px; padding: 10px 12px;
+      flex-wrap: wrap;
+    }
+    .main-header h2 { font-size: 17px; }
+    .nav-btn { padding: 8px 12px; font-size: 15px; }
+    #today-btn { margin-left: auto; }
+    .calendar-area { padding: 10px; }
+
+    /* Vista anno: una colonna */
+    .year-grid { grid-template-columns: 1fr; gap: 12px; }
+    .mini-month { padding: 14px; }
+    .mini-month h3 { font-size: 16px; }
+    .mini-grid { font-size: 14px; gap: 3px; }
+    .mini-day { font-size: 13px; }
+    .mini-day .mini-dot { width: 5px; height: 5px; }
+
+    /* Vista mese: celle piu' compatte ma leggibili */
+    .month-hint { font-size: 12px; padding: 8px; }
+    .month-grid { gap: 2px; }
+    .month-grid .dow { font-size: 10px; padding: 4px 0; }
+    .day-cell { min-height: 64px; padding: 3px; border-radius: 4px; }
+    .day-num { width: 22px; height: 22px; font-size: 13px; margin-bottom: 2px; }
+    .user-chip-mini { font-size: 9px; padding: 1px 5px; }
+    .day-cell.density-m .user-chip-mini,
+    .day-cell.density-s .user-chip-mini,
+    .day-cell.density-xs .user-chip-mini { font-size: 8px; padding: 0 4px; }
+
+    /* Vista giorno */
+    .day-section { padding: 14px; }
+    .slot-row { padding: 10px; gap: 8px; }
+    .slot-time { min-width: 92px; font-size: 13px; }
+    .toggle-btn { padding: 14px; font-size: 15px; }
+  }
+
+  @media (max-width: 380px) {
+    .month-grid .dow { font-size: 9px; }
+    .day-cell { min-height: 56px; }
+    .user-chip-mini { font-size: 8px; padding: 0 4px; }
   }
 </style>
 </head>
@@ -351,6 +421,7 @@
 
   <main>
     <div class="main-header">
+      <button class="menu-toggle" id="menu-toggle" aria-label="Partecipanti"><span></span><span></span><span></span></button>
       <button class="nav-btn" id="back" hidden>&larr;</button>
       <h2 id="view-title"></h2>
       <button class="nav-btn" id="prev" hidden>&lsaquo;</button>
@@ -359,6 +430,7 @@
     </div>
     <div class="calendar-area" id="calendar"></div>
   </main>
+  <div id="sidebar-overlay"></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -800,6 +872,27 @@ function attachSlotHandlers(cal) {
       if (!isSlotDragging) return;
       addSlotToDrag(el, el.dataset.hour);
     });
+    // Touch (mobile): distingue tap da scroll
+    let tStart = null;
+    el.addEventListener("touchstart", (e) => {
+      const t = e.touches[0];
+      tStart = { x: t.clientX, y: t.clientY };
+    }, { passive: true });
+    el.addEventListener("touchend", (e) => {
+      if (!tStart) return;
+      const t = e.changedTouches[0];
+      const moved = Math.abs(t.clientX - tStart.x) > 10 || Math.abs(t.clientY - tStart.y) > 10;
+      tStart = null;
+      if (moved) return;
+      e.preventDefault();
+      if (!sessionData.users[myUserId]) { toast("Unisciti per segnare la tua disponibilit\u00e0"); return; }
+      const hour = el.dataset.hour;
+      const key = dateKey(view.year, view.month, view.day);
+      const isAvail = getSlotUsers(key, hour).includes(myUserId);
+      updateDoc(doc(db, "sessions", sessionId), {
+        [`slots.${key}.${hour}.${myUserId}`]: isAvail ? deleteField() : true
+      });
+    });
   });
 }
 
@@ -839,6 +932,31 @@ function attachMonthHandlers(cal) {
       if (!isDragging) return;
       const key = dateKey(parseInt(el.dataset.year), parseInt(el.dataset.month), parseInt(el.dataset.day));
       addToDrag(el, key);
+    });
+    // Touch (mobile): distingue tap da scroll
+    let tStart = null;
+    el.addEventListener("touchstart", (e) => {
+      const t = e.touches[0];
+      tStart = { x: t.clientX, y: t.clientY };
+    }, { passive: true });
+    el.addEventListener("touchend", (e) => {
+      if (!tStart) return;
+      const t = e.changedTouches[0];
+      const moved = Math.abs(t.clientX - tStart.x) > 10 || Math.abs(t.clientY - tStart.y) > 10;
+      tStart = null;
+      if (moved) return; // era uno scroll
+      e.preventDefault();
+      if (e.target.classList.contains("day-num")) {
+        view = { type: "day", year: parseInt(el.dataset.year), month: parseInt(el.dataset.month), day: parseInt(el.dataset.day) };
+        render();
+        return;
+      }
+      if (!sessionData.users[myUserId]) { toast("Unisciti per segnare la tua disponibilit\u00e0"); return; }
+      const key = dateKey(parseInt(el.dataset.year), parseInt(el.dataset.month), parseInt(el.dataset.day));
+      const isAvail = getAvailabilityFor(key).includes(myUserId);
+      updateDoc(doc(db, "sessions", sessionId), {
+        [`availability.${key}.${myUserId}`]: isAvail ? deleteField() : true
+      });
     });
   });
 }
@@ -900,6 +1018,12 @@ document.getElementById("edit-title").onclick = async () => {
     await updateDoc(doc(db, "sessions", sessionId), { title: newTitle.trim() });
   }
 };
+
+// Drawer mobile
+const appEl = document.getElementById("app");
+function closeDrawer() { appEl.classList.remove("sidebar-open"); }
+document.getElementById("menu-toggle").onclick = () => appEl.classList.toggle("sidebar-open");
+document.getElementById("sidebar-overlay").onclick = closeDrawer;
 
 document.getElementById("share").onclick = () => {
   navigator.clipboard.writeText(location.href).then(() => toast("Link copiato!"));
